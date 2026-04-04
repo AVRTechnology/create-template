@@ -6,12 +6,27 @@ import crypto from 'crypto'
 
 const MAX_SELFIE_BYTES = 3 * 1024 * 1024
 
-function sanitizeName(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 40) || 'user'
+/** 10-digit mobile only (India-style); used as stable Cloudinary public_id suffix. */
+function normalizeMobileDigits(input: string): string | null {
+  const d = String(input || '').replace(/\D/g, '')
+  if (d.length !== 10) return null
+  return d
+}
+
+/**
+ * Parse public_id from a typical Cloudinary delivery URL (no heavy transforms).
+ * Example: .../upload/v123/folder/m_9876543210.jpg → folder/m_9876543210
+ */
+function extractPublicIdFromCloudinaryUrl(url: string): string | null {
+  try {
+    const u = new URL(url)
+    if (!u.hostname.includes('res.cloudinary.com')) return null
+    const m = u.pathname.match(/\/upload\/(?:v\d+\/)?(.+)\.[a-zA-Z0-9]+$/i)
+    if (!m?.[1]) return null
+    return decodeURIComponent(m[1])
+  } catch {
+    return null
+  }
 }
 
 function parseDataUrl(dataUrl: string) {
@@ -63,11 +78,7 @@ async function sendToSheet(payload: Record<string, unknown>) {
   return parsed
 }
 
-async function uploadToCloudinary(params: {
-  selfieDataUrl: string
-  name: string
-  timestamp: string
-}) {
+async function uploadToCloudinary(params: { selfieDataUrl: string; mobileDigits: string }) {
   const cloudName = process.env.CLOUDINARY_CLOUD_NAME
   const apiKey = process.env.CLOUDINARY_API_KEY
   const apiSecret = process.env.CLOUDINARY_API_SECRET
@@ -88,11 +99,9 @@ async function uploadToCloudinary(params: {
   }
 
   const ts = Math.floor(Date.now() / 1000)
-  const safeName = sanitizeName(params.name)
-  const timePart = params.timestamp.replace(/[:.]/g, '-')
   const ext = extensionFromMime(parsed.mimeType)
-  const baseFileName = `${safeName}_${timePart}`
-  const publicId = baseFileName
+  /** One asset per mobile — overwrite replaces this user's previous image only. */
+  const publicId = `m_${params.mobileDigits}`
 
   const signaturePayload = `folder=${folder}&overwrite=true&public_id=${publicId}&timestamp=${ts}${apiSecret}`
   const signature = crypto.createHash('sha1').update(signaturePayload).digest('hex')
@@ -117,9 +126,39 @@ async function uploadToCloudinary(params: {
     throw new Error(uploadData?.error?.message || 'Cloudinary upload failed')
   }
 
+  const fullPublicId = (uploadData.public_id as string) || `${folder}/${publicId}`
+
   return {
     selfieUrl: uploadData.secure_url as string,
-    fileName: `${baseFileName}.${uploadData.format || ext}`,
+    fileName: `${publicId}.${uploadData.format || ext}`,
+    publicId: fullPublicId,
+  }
+}
+
+/** Remove a previous Cloudinary image by public_id (only when it differs from the new asset). */
+async function destroyCloudinaryAsset(publicId: string) {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME
+  const apiKey = process.env.CLOUDINARY_API_KEY
+  const apiSecret = process.env.CLOUDINARY_API_SECRET
+  if (!cloudName || !apiKey || !apiSecret) return
+
+  const ts = Math.floor(Date.now() / 1000)
+  const signaturePayload = `public_id=${publicId}&timestamp=${ts}${apiSecret}`
+  const signature = crypto.createHash('sha1').update(signaturePayload).digest('hex')
+
+  const formData = new FormData()
+  formData.append('public_id', publicId)
+  formData.append('api_key', apiKey)
+  formData.append('timestamp', String(ts))
+  formData.append('signature', signature)
+
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/destroy`, {
+    method: 'POST',
+    body: formData,
+  })
+  const data = await response.json()
+  if (!response.ok && data?.result !== 'not found') {
+    console.warn('Cloudinary destroy:', data?.error?.message || JSON.stringify(data))
   }
 }
 
@@ -136,23 +175,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Selfie is required' }, { status: 400 })
     }
 
+    const mobileDigits = normalizeMobileDigits(mobile)
+    if (!mobileDigits) {
+      return NextResponse.json({ error: 'Valid 10-digit mobile number required' }, { status: 400 })
+    }
+
     const normalizedTimestamp = timestamp || new Date().toISOString()
     const recordId = createRecordId(normalizedTimestamp)
-    const { selfieUrl, fileName } = await uploadToCloudinary({
+
+    const { selfieUrl, fileName, publicId: newPublicIdRaw } = await uploadToCloudinary({
       selfieDataUrl: selfieBase64,
-      name,
-      timestamp: normalizedTimestamp,
+      mobileDigits,
     })
+    /** Same extraction as previousImageUrl so folder/path quirks do not false-trigger destroy. */
+    const newPublicIdForCompare = extractPublicIdFromCloudinaryUrl(selfieUrl) || newPublicIdRaw
+
+    let sheetResult: {
+      schemaVersion?: number
+      action?: string
+      recordId?: string
+      previousImageUrl?: string
+    } | null = null
 
     try {
-      const sheetResult = await sendToSheet({
-        action: 'add',
+      sheetResult = await sendToSheet({
+        action: 'upsert',
         recordId,
-        name,
-        mobile,
+        name: String(name).trim(),
+        mobile: mobileDigits,
         selfieUrl,
       })
-      if (!sheetResult || sheetResult.schemaVersion !== 2 || sheetResult.action !== 'add') {
+      const ok =
+        sheetResult &&
+        sheetResult.schemaVersion === 2 &&
+        (sheetResult.action === 'add' || sheetResult.action === 'update')
+      if (!ok) {
         throw new Error('Apps Script deployment is outdated. Please redeploy latest script.')
       }
     } catch (sheetError) {
@@ -164,12 +221,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 502 })
     }
 
+    const previousImageUrl =
+      typeof sheetResult?.previousImageUrl === 'string' ? sheetResult.previousImageUrl : ''
+    if (previousImageUrl && sheetResult?.action === 'update') {
+      const oldPublicId = extractPublicIdFromCloudinaryUrl(previousImageUrl)
+      if (oldPublicId && oldPublicId !== newPublicIdForCompare) {
+        try {
+          await destroyCloudinaryAsset(oldPublicId)
+        } catch (destroyErr) {
+          console.error('Could not remove previous image from Cloudinary:', destroyErr)
+        }
+      }
+    }
+
+    const finalRecordId = typeof sheetResult?.recordId === 'string' ? sheetResult.recordId : recordId
+
     return NextResponse.json({
       success: true,
-      message: 'Registration saved!',
-      recordId,
+      message: sheetResult?.action === 'update' ? 'Registration updated!' : 'Registration saved!',
+      recordId: finalRecordId,
       selfieUrl,
       fileName,
+      updated: sheetResult?.action === 'update',
     })
   } catch (error) {
     console.error('API Error:', error)

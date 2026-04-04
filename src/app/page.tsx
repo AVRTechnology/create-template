@@ -9,7 +9,7 @@ const MAX_SELFIE_BYTES = 3 * 1024 * 1024
 /** Viewport width at or below this uses the camera + gallery sheet; above opens file picker only (no camera). */
 const SELFIE_MOBILE_MAX_PX = 724
 /** Full name (e.g. surname + name) — length must stay in this range for poster + download. */
-const NAME_MIN = 30
+const NAME_MIN = 5
 const NAME_MAX = 40
 
 function isValidNameLength(value: string) {
@@ -162,7 +162,7 @@ export default function Home() {
   const handleSave = async () => {
     if (!name.trim()) { setError('કૃપા કરી તમારું નામ દાખલ કરો'); return }
     if (!isValidNameLength(name)) {
-      setError(`પૂરું નામ ${NAME_MIN} થી ${NAME_MAX} અક્ષર વચ્ચે લખો (શ્રીનામ + નામ).`)
+      setError(`પૂરું નામ ${NAME_MIN} થી ${NAME_MAX} અક્ષર વચ્ચે લખો (અટક + નામ).`)
       return
     }
     if (!mobile.trim() || mobile.length < 10) { setError('કૃપા કરી માન્ય મોબાઇલ નંબર દાખલ કરો'); return }
@@ -303,7 +303,7 @@ export default function Home() {
               />
               {name.trim().length > 0 && !isValidNameLength(name) && (
                 <p className="field-hint field-hint-warn">
-                  શ્રીનામ સહિત પૂરું નામ — {NAME_MIN} થી {NAME_MAX} અક્ષર
+                  અટક સહિત પૂરું નામ — {NAME_MIN} થી {NAME_MAX} અક્ષર
                 </p>
               )}
             </div>

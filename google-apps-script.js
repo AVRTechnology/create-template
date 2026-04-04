@@ -168,6 +168,64 @@ function deleteRecordById(sheet, recordId) {
   return { success: false, schemaVersion: 2, action: 'delete', error: 'Record not found', recordId: recordId };
 }
 
+function normalizeMobileForMatch(m) {
+  return String(m || '').replace(/\D/g, '');
+}
+
+/**
+ * Same mobile → update Name + Image URL in place (same row, same ID).
+ * New mobile → append row (same as addRecord).
+ */
+function upsertRecord(sheet, data, headers) {
+  var mobileNorm = normalizeMobileForMatch(data.mobile);
+  var mobileColIdx = headers.indexOf('Mobile');
+  if (mobileColIdx < 0) {
+    throw new Error('Mobile column missing');
+  }
+  var mobileCol = mobileColIdx + 1;
+
+  var nameColIdx = headers.indexOf('Name');
+  var imgColIdx = headers.indexOf('Image URL');
+  var idColIdx = headers.indexOf('ID');
+
+  var lastRow = sheet.getLastRow();
+  var foundRow = -1;
+  if (lastRow > 1) {
+    var mobileValues = sheet.getRange(2, mobileCol, lastRow, mobileCol).getValues();
+    for (var i = 0; i < mobileValues.length; i++) {
+      if (normalizeMobileForMatch(mobileValues[i][0]) === mobileNorm) {
+        foundRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  if (foundRow > 0) {
+    var previousImageUrl = '';
+    if (imgColIdx >= 0) {
+      previousImageUrl = String(sheet.getRange(foundRow, imgColIdx + 1).getValue() || '');
+    }
+    if (nameColIdx >= 0) {
+      sheet.getRange(foundRow, nameColIdx + 1).setValue(data.name || '');
+    }
+    if (imgColIdx >= 0) {
+      sheet.getRange(foundRow, imgColIdx + 1).setValue(data.selfieUrl || '');
+    }
+    var recordId = idColIdx >= 0 ? String(sheet.getRange(foundRow, idColIdx + 1).getValue() || '') : '';
+    return {
+      success: true,
+      schemaVersion: 2,
+      action: 'update',
+      message: 'Registration updated!',
+      recordId: recordId,
+      row: foundRow,
+      previousImageUrl: previousImageUrl
+    };
+  }
+
+  return addRecord(sheet, data, headers);
+}
+
 function doPost(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
@@ -184,6 +242,8 @@ function doPost(e) {
       } else {
         result = deleteRecordById(sheet, data.recordId);
       }
+    } else if (action === 'upsert') {
+      result = upsertRecord(sheet, data, headers);
     } else {
       result = addRecord(sheet, data, headers);
     }
