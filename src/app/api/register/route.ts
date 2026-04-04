@@ -27,6 +27,42 @@ function extensionFromMime(mimeType: string) {
   return 'jpg'
 }
 
+function createRecordId(timestamp: string) {
+  const parsed = Date.parse(timestamp)
+  const epochMs = Number.isFinite(parsed) ? parsed : Date.now()
+  return `rec_${epochMs}`
+}
+
+async function sendToSheet(payload: Record<string, unknown>) {
+  const sheetUrl = process.env.GOOGLE_SHEET_URL
+  if (!sheetUrl) {
+    throw new Error('GOOGLE_SHEET_URL is not configured')
+  }
+
+  const sheetResponse = await fetch(sheetUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+
+  const responseText = await sheetResponse.text()
+  let parsed: any = null
+  try {
+    parsed = responseText ? JSON.parse(responseText) : null
+  } catch {
+    // Keep parsed as null for non-JSON script responses.
+  }
+
+  if (!sheetResponse.ok) {
+    throw new Error(`Sheet responded with ${sheetResponse.status}`)
+  }
+  if (parsed && parsed.success === false) {
+    throw new Error(parsed.error || 'Apps Script returned failure')
+  }
+
+  return parsed
+}
+
 async function uploadToCloudinary(params: {
   selfieDataUrl: string
   name: string
@@ -101,47 +137,64 @@ export async function POST(request: NextRequest) {
     }
 
     const normalizedTimestamp = timestamp || new Date().toISOString()
+    const recordId = createRecordId(normalizedTimestamp)
     const { selfieUrl, fileName } = await uploadToCloudinary({
       selfieDataUrl: selfieBase64,
       name,
       timestamp: normalizedTimestamp,
     })
 
-    const sheetUrl = process.env.GOOGLE_SHEET_URL
-
-    if (sheetUrl) {
-      // Send to Google Sheets via Apps Script
-      try {
-        const sheetResponse = await fetch(sheetUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            mobile,
-            selfieUrl,
-            fileName,
-            timestamp: normalizedTimestamp,
-          }),
-        })
-        if (!sheetResponse.ok) {
-          throw new Error(`Sheet responded with ${sheetResponse.status}`)
-        }
-      } catch (sheetError) {
-        console.error('Sheet save error:', sheetError)
-        return NextResponse.json({ error: 'Could not save to Google Sheet' }, { status: 502 })
-      }
-    } else {
-      return NextResponse.json({ error: 'GOOGLE_SHEET_URL is not configured' }, { status: 500 })
+    try {
+      await sendToSheet({
+        action: 'add',
+        recordId,
+        name,
+        mobile,
+        selfieUrl,
+        fileName,
+        createdAt: normalizedTimestamp,
+      })
+    } catch (sheetError) {
+      console.error('Sheet save error:', sheetError)
+      return NextResponse.json({ error: 'Could not save to Google Sheet' }, { status: 502 })
     }
 
     return NextResponse.json({
       success: true,
       message: 'Registration saved!',
+      recordId,
       selfieUrl,
       fileName,
     })
   } catch (error) {
     console.error('API Error:', error)
+    return NextResponse.json({ error: 'Server error' }, { status: 500 })
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const recordId = body?.recordId
+
+    if (!recordId || typeof recordId !== 'string') {
+      return NextResponse.json({ error: 'recordId is required' }, { status: 400 })
+    }
+
+    try {
+      const sheetResult = await sendToSheet({ action: 'delete', recordId })
+      return NextResponse.json({
+        success: true,
+        message: 'Record deleted',
+        recordId,
+        ...(sheetResult || {}),
+      })
+    } catch (sheetError) {
+      console.error('Sheet delete error:', sheetError)
+      return NextResponse.json({ error: 'Could not delete from Google Sheet' }, { status: 502 })
+    }
+  } catch (error) {
+    console.error('API Delete Error:', error)
     return NextResponse.json({ error: 'Server error' }, { status: 500 })
   }
 }
