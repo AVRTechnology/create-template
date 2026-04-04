@@ -6,6 +6,15 @@ import ShareButtons from '@/components/ShareButtons'
 import { getPosterTemplate, posterTemplates, type PosterTemplateId } from '@/lib/posterTemplates'
 
 const MAX_SELFIE_BYTES = 3 * 1024 * 1024
+/** Original file above this size is re-encoded as JPEG (90% quality) before preview/upload. */
+const COMPRESS_THRESHOLD_BYTES = 2 * 1024 * 1024
+const JPEG_QUALITY_LARGE = 0.9
+
+function dataUrlDecodedBytes(dataUrl: string): number {
+  const i = dataUrl.indexOf('base64,')
+  if (i === -1) return Math.ceil(dataUrl.length * 3 / 4)
+  return Math.ceil((dataUrl.length - (i + 7)) * 3 / 4)
+}
 /** Viewport width at or below this uses the camera + gallery sheet; above opens file picker only (no camera). */
 const SELFIE_MOBILE_MAX_PX = 724
 /** Full name (e.g. surname + name) — length must stay in this range for poster + download. */
@@ -36,7 +45,7 @@ function imageElementFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
 }
 
 async function compressIfNeeded(file: File): Promise<string> {
-  if (file.size <= MAX_SELFIE_BYTES) {
+  if (file.size <= COMPRESS_THRESHOLD_BYTES) {
     return fileToDataUrl(file)
   }
 
@@ -52,15 +61,19 @@ async function compressIfNeeded(file: File): Promise<string> {
   canvas.height = Math.max(1, Math.round(img.height * scale))
   ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
 
-  let quality = 0.9
+  let quality = JPEG_QUALITY_LARGE
   let compressed = canvas.toDataURL('image/jpeg', quality)
+  if (dataUrlDecodedBytes(compressed) <= MAX_SELFIE_BYTES) {
+    return compressed
+  }
+
+  quality = 0.8
   while (quality >= 0.5) {
-    const bytes = Math.ceil((compressed.length - 'data:image/jpeg;base64,'.length) * 3 / 4)
-    if (bytes <= MAX_SELFIE_BYTES) {
+    compressed = canvas.toDataURL('image/jpeg', quality)
+    if (dataUrlDecodedBytes(compressed) <= MAX_SELFIE_BYTES) {
       return compressed
     }
     quality -= 0.1
-    compressed = canvas.toDataURL('image/jpeg', quality)
   }
 
   throw new Error('Image is too large. Please choose a smaller photo.')
@@ -327,7 +340,9 @@ export default function Home() {
                   <>
                     <span className="upload-icon">🤳</span>
                     <p className="upload-text">ક્લિક કરો - ફોટો અપલોડ કરો</p>
-                    <p className="upload-hint">JPG, PNG • મહ. 3MB (મોટું હોય તો auto-compress)</p>
+                    <p className="upload-hint">
+                      JPG, PNG • મહ. 3MB • 2MB થી મોટા ફોટાને 90% ગુણવત્તાએ કમ્પ્રેસ કરીએ
+                    </p>
                   </>
                 )}
               </div>
