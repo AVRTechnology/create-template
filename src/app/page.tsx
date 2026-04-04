@@ -73,9 +73,18 @@ export default function Home() {
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
   const [posterDataUrl, setPosterDataUrl] = useState<string>('')
   const [error, setError] = useState('')
+  /** Background sheet/Cloudinary sync — does not block download/share. */
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'pending' | 'ok' | 'error'>('idle')
   const [selfiePickerOpen, setSelfiePickerOpen] = useState(false)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
+  /** Always latest form values for queued sync steps (avoids stale name after quick edits). */
+  const formRef = useRef({ name: '', mobile: '', selfie: null as string | null })
+  /** Serialize /api/register calls so rapid downloads don’t race into duplicate Sheet rows. */
+  const syncChainRef = useRef(Promise.resolve())
+  const syncClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  formRef.current = { name, mobile, selfie: selfiePreview }
   const selectedTemplate = getPosterTemplate(templateId)
   const themeVars = {
     '--template-primary': selectedTemplate.primaryColor,
@@ -127,6 +136,12 @@ export default function Home() {
     return () => window.removeEventListener('resize', onResize)
   }, [])
 
+  useEffect(() => {
+    return () => {
+      if (syncClearTimerRef.current) clearTimeout(syncClearTimerRef.current)
+    }
+  }, [])
+
   /** Wide screens: open system file picker only. Narrow (phones / small tablets): show camera vs gallery sheet. */
   const openSelfiePicker = () => {
     if (typeof window !== 'undefined' && window.innerWidth > SELFIE_MOBILE_MAX_PX) {
@@ -158,24 +173,58 @@ export default function Home() {
     document.body.removeChild(link)
   }
 
-  /** Sheet + Cloudinary sync — never block download/share; failures only logged. */
-  const syncRegistrationBackground = useCallback(() => {
-    if (!isValidNameLength(name) || mobile.trim().length !== 10 || !selfiePreview) return
-    void fetch('/api/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: name.trim(),
-        mobile: mobile.trim(),
-        selfieBase64: selfiePreview,
-        timestamp: new Date().toISOString(),
-      }),
-    })
-      .then(async res => {
-        if (!res.ok) console.error('[register]', await res.text().catch(() => ''))
+  const clearSyncTimer = () => {
+    if (syncClearTimerRef.current) {
+      clearTimeout(syncClearTimerRef.current)
+      syncClearTimerRef.current = null
+    }
+  }
+
+  /**
+   * Queue server sync (Sheet upsert + Cloudinary image for this mobile).
+   * Runs one after another; each step reads the latest form from `formRef` so a name
+   * change + second download updates the sheet with the new name, not an old snapshot.
+   */
+  const enqueueRegistrationSync = useCallback(() => {
+    syncChainRef.current = syncChainRef.current
+      .catch(() => {
+        /* keep chain alive after a failed step */
       })
-      .catch(err => console.error('[register]', err))
-  }, [name, mobile, selfiePreview])
+      .then(async () => {
+        const { name: rawName, mobile: rawMobile, selfie } = formRef.current
+        const trimmedName = rawName.trim()
+        const digits = rawMobile.replace(/\D/g, '')
+        if (!selfie || digits.length !== 10 || !isValidNameLength(trimmedName)) return
+
+        clearSyncTimer()
+        setSyncStatus('pending')
+        try {
+          const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: trimmedName,
+              mobile: digits,
+              selfieBase64: selfie,
+              timestamp: new Date().toISOString(),
+            }),
+          })
+          const raw = await res.text().catch(() => '')
+          if (!res.ok) {
+            console.error('[register]', res.status, raw)
+            setSyncStatus('error')
+            syncClearTimerRef.current = setTimeout(() => setSyncStatus('idle'), 10000)
+            return
+          }
+          setSyncStatus('ok')
+          syncClearTimerRef.current = setTimeout(() => setSyncStatus('idle'), 5000)
+        } catch (err) {
+          console.error('[register]', err)
+          setSyncStatus('error')
+          syncClearTimerRef.current = setTimeout(() => setSyncStatus('idle'), 10000)
+        }
+      })
+  }, [])
 
   /** Validate, download immediately, then save/update by mobile in background. */
   const handleDownloadAndSync = () => {
@@ -201,7 +250,7 @@ export default function Home() {
     }
     setError('')
     downloadPoster()
-    queueMicrotask(() => syncRegistrationBackground())
+    enqueueRegistrationSync()
   }
 
   return (
@@ -374,7 +423,7 @@ export default function Home() {
                     href={posterDataUrl}
                     download={`parshuram-shobhayatra-${(name || 'poster').trim().replace(/\s+/g, '-')}.png`}
                     className="btn-download"
-                    onClick={() => queueMicrotask(() => syncRegistrationBackground())}
+                    onClick={() => enqueueRegistrationSync()}
                   >
                     ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
                   </a>
@@ -387,8 +436,20 @@ export default function Home() {
                   name={name}
                   posterDataUrl={posterDataUrl}
                   shareEnabled={isFormValid}
-                  onShareComplete={syncRegistrationBackground}
+                  onShareComplete={enqueueRegistrationSync}
                 />
+                {syncStatus !== 'idle' && (
+                  <p
+                    className={`sync-hint${syncStatus === 'ok' ? ' sync-hint-ok' : ''}${syncStatus === 'error' ? ' sync-hint-err' : ''}${syncStatus === 'pending' ? ' sync-hint-pending' : ''}`}
+                    role="status"
+                  >
+                    {syncStatus === 'pending' && '⏳ શીટ અને ફોટો સેવ થઈ રહ્યા છે (મોબાઇલ પ્રમાણે)…'}
+                    {syncStatus === 'ok' &&
+                      '✓ મોબાઇલ નંબર મુજબ શીટ અપડેટ — ફોટો Cloudinary પર સેવ થયો.'}
+                    {syncStatus === 'error' &&
+                      '⚠ શીટ સેવ ન થઈ શકી. ઇન્ટરનેટ / Apps Script ચેક કરી ફરી ડાઉનલોડ કરો.'}
+                  </p>
+                )}
               </div>
             )}
           </div>

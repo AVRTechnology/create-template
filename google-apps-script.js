@@ -247,6 +247,17 @@ function upsertRecord(sheet, data, headers) {
 }
 
 function doPost(e) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(30000);
+  } catch (lockErr) {
+    return ContentService
+      .createTextOutput(JSON.stringify({
+        success: false,
+        error: 'Sheet is busy — try again in a moment'
+      }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     var data = JSON.parse(e.postData.contents || '{}');
@@ -281,6 +292,8 @@ function doPost(e) {
         error: err.toString()
       }))
       .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
   }
 }
 
