@@ -5,32 +5,34 @@
 }
 
 :root {
-  --saffron: #E65100;
-  --deep-saffron: #BF360C;
-  --maroon: #7B0000;
-  --dark-maroon: #4A0000;
-  --gold: #D4A017;
-  --gold-light: #FFD700;
-  --cream: #FFFBF0;
-  --cream-dark: #FFF3D4;
-  --blue: #0D3C8B;
+  --saffron: #EA7A1B;
+  --deep-saffron: #C95E07;
+  --maroon: #BE1619;
+  --dark-maroon: #8E0F12;
+  --gold: #F7B037;
+  --gold-light: #FFD771;
+  --cream: #F3FAFF;
+  --cream-dark: #DCF1FD;
+  --blue: #02609D;
   --text-dark: #2C0A00;
   --white: #FFFFFF;
+  --template-primary: #D52227;
+  --template-secondary: #0B5C95;
 }
 
 html, body {
   font-family: 'Noto Sans Gujarati', 'Poppins', sans-serif;
-  background: linear-gradient(135deg, #FFF8E7 0%, #FFF3CD 50%, #FFE8B2 100%);
+  background: linear-gradient(180deg, #EBF7FF 0%, #D7EEFC 100%);
   min-height: 100vh;
   color: var(--text-dark);
 }
 
 /* ── HEADER ── */
 .app-header {
-  background: linear-gradient(135deg, #6B0000 0%, #A00000 40%, #6B0000 100%);
-  padding: 16px;
+  background: linear-gradient(180deg, var(--template-secondary) 0%, #014A7A 100%);
+  padding: 14px;
   text-align: center;
-  border-bottom: 4px solid var(--gold);
+  border-bottom: 4px solid var(--template-primary);
   position: relative;
 }
 
@@ -44,10 +46,10 @@ html, body {
 }
 
 .header-om {
-  font-size: 1.6rem;
+  font-size: 1.3rem;
   color: var(--gold-light);
-  margin-bottom: 4px;
-  text-shadow: 0 0 20px rgba(255,215,0,0.6);
+  margin-bottom: 2px;
+  text-shadow: 0 0 16px rgba(255,215,0,0.5);
 }
 
 .header-title {
@@ -60,8 +62,8 @@ html, body {
 }
 
 .header-sub {
-  font-size: 0.78rem;
-  color: #FFD700;
+  font-size: 0.76rem;
+  color: #FFE6A3;
   letter-spacing: 0.05em;
 }
 
@@ -85,10 +87,11 @@ html, body {
 /* ── CARD BASE ── */
 .card {
   background: white;
-  border-radius: 18px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.1), 0 1px 6px rgba(0,0,0,0.06);
+  border-radius: 14px;
+  box-shadow: 0 6px 20px rgba(2, 96, 157, 0.12), 0 1px 4px rgba(0,0,0,0.05);
   overflow: hidden;
   margin-bottom: 20px;
+  border: 1px solid color-mix(in srgb, var(--template-secondary) 22%, white);
 }
 
 @media (min-width: 768px) {
@@ -103,12 +106,12 @@ html, body {
 }
 
 .card-header {
-  background: linear-gradient(135deg, #6B0000, #A00000);
+  background: linear-gradient(135deg, var(--template-primary), color-mix(in srgb, var(--template-primary) 76%, black));
   padding: 12px 16px;
   display: flex;
   align-items: center;
   gap: 10px;
-  border-bottom: 3px solid var(--gold);
+  border-bottom: 3px solid var(--template-secondary);
 }
 
 .card-header-icon {
@@ -123,8 +126,8 @@ html, body {
 
 .card-header-badge {
   margin-left: auto;
-  background: var(--gold-light);
-  color: var(--dark-maroon);
+  background: color-mix(in srgb, var(--template-secondary) 16%, white);
+  color: var(--template-secondary);
   font-size: 0.7rem;
   font-weight: 700;
   padding: 2px 8px;
@@ -140,9 +143,10 @@ html, body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  background: #f5f0e8;
-  padding: 12px;
+  background: color-mix(in srgb, var(--template-secondary) 12%, white);
+  padding: 10px;
   border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--template-secondary) 24%, white);
 }
 
 .preview-canvas-wrap canvas {
@@ -169,14 +173,14 @@ html, body {
   display: block;
   font-weight: 600;
   font-size: 0.9rem;
-  color: var(--dark-maroon);
+  color: var(--template-primary);
   margin-bottom: 6px;
 }
 
 .form-input {
   width: 100%;
   padding: 12px 14px;
-  border: 2px solid #E0C8A0;
+  border: 2px solid color-mix(in srgb, var(--template-primary) 18%, white);
   border-radius: 10px;
   font-size: 1rem;
   font-family: 'Noto Sans Gujarati', sans-serif;
@@ -187,14 +191,80 @@ html, body {
 }
 
 .form-input:focus {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(212,160,23,0.15);
+  border-color: var(--template-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--template-primary) 18%, white);
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 700px) {
+  .template-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.template-option {
+  position: relative;
+  display: block;
+  border: 2px solid color-mix(in srgb, var(--template-secondary) 16%, white);
+  border-radius: 14px;
+  padding: 8px;
+  background: white;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.template-option:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.08);
+}
+
+.template-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.template-option-active {
+  border-color: var(--template-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--template-primary) 14%, white);
+}
+
+.template-option-image {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--template-secondary) 14%, white);
+}
+
+.template-option-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.template-option-title {
+  color: var(--template-primary);
+  font-weight: 700;
+  font-size: 0.88rem;
+}
+
+.template-option-subtitle {
+  color: #6B7280;
+  font-size: 0.76rem;
 }
 
 /* Selfie Upload */
 .selfie-upload-area {
   width: 100%;
-  border: 2px dashed #D4A017;
+  border: 2px dashed color-mix(in srgb, var(--template-primary) 35%, white);
   border-radius: 14px;
   background: #FFFBF0;
   padding: 20px;
@@ -210,8 +280,8 @@ html, body {
 }
 
 .selfie-upload-area:hover {
-  background: #FFF3CD;
-  border-color: var(--saffron);
+  background: color-mix(in srgb, var(--template-secondary) 8%, #FFF3CD);
+  border-color: var(--template-primary);
 }
 
 .selfie-upload-area .upload-icon {
@@ -219,7 +289,7 @@ html, body {
 }
 
 .selfie-upload-area .upload-text {
-  color: var(--saffron);
+  color: var(--template-primary);
   font-weight: 600;
   font-size: 0.9rem;
 }
@@ -239,7 +309,7 @@ html, body {
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid var(--gold);
+  border: 3px solid var(--template-primary);
 }
 
 .selfie-change-btn {
@@ -248,7 +318,7 @@ html, body {
   right: 2px;
   width: 26px;
   height: 26px;
-  background: var(--saffron);
+  background: var(--template-primary);
   color: white;
   border-radius: 50%;
   border: none;
@@ -274,7 +344,7 @@ html, body {
 .btn-primary {
   width: 100%;
   padding: 14px;
-  background: linear-gradient(135deg, #6B0000, #A00000);
+  background: linear-gradient(135deg, var(--template-primary), color-mix(in srgb, var(--template-primary) 72%, black));
   color: white;
   border: none;
   border-radius: 12px;
@@ -302,7 +372,7 @@ html, body {
   justify-content: center;
   gap: 8px;
   padding: 13px 20px;
-  background: linear-gradient(135deg, #1B5E20, #2E7D32);
+  background: linear-gradient(135deg, var(--template-secondary), color-mix(in srgb, var(--template-secondary) 72%, black));
   color: white;
   border-radius: 12px;
   font-weight: 700;
@@ -325,7 +395,7 @@ html, body {
 .share-title {
   text-align: center;
   font-weight: 600;
-  color: var(--dark-maroon);
+  color: var(--template-primary);
   font-size: 0.85rem;
   margin-bottom: 10px;
 }
@@ -365,7 +435,7 @@ html, body {
 .app-footer {
   text-align: center;
   padding: 20px 16px;
-  background: #3D0000;
+  background: color-mix(in srgb, var(--template-secondary) 65%, black);
   color: #FFB74D;
   font-size: 0.8rem;
 }
@@ -382,9 +452,9 @@ html, body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  background: #E8F5E9;
-  border: 1px solid #A5D6A7;
-  color: #2E7D32;
+  background: color-mix(in srgb, var(--template-secondary) 10%, white);
+  border: 1px solid color-mix(in srgb, var(--template-secondary) 28%, white);
+  color: var(--template-secondary);
   font-size: 0.72rem;
   font-weight: 600;
   padding: 3px 10px;
@@ -395,7 +465,7 @@ html, body {
 .live-dot {
   width: 6px;
   height: 6px;
-  background: #43A047;
+  background: var(--template-primary);
   border-radius: 50%;
   animation: pulse 1.5s ease-in-out infinite;
 }

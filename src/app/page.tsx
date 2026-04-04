@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, type CSSProperties } from 'react'
 import PosterCanvas from '@/components/PosterCanvas'
 import ShareButtons from '@/components/ShareButtons'
+import { getPosterTemplate, posterTemplates, type PosterTemplateId } from '@/lib/posterTemplates'
 
 const MAX_SELFIE_BYTES = 3 * 1024 * 1024
 
@@ -56,6 +57,7 @@ async function compressIfNeeded(file: File): Promise<string> {
 }
 
 export default function Home() {
+  const [templateId, setTemplateId] = useState<PosterTemplateId>('page-1')
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
@@ -63,6 +65,12 @@ export default function Home() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const selectedTemplate = getPosterTemplate(templateId)
+  const themeVars = {
+    '--template-primary': selectedTemplate.primaryColor,
+    '--template-secondary': selectedTemplate.secondaryColor,
+  } as CSSProperties
+  const isFormValid = Boolean(name.trim() && mobile.trim().length === 10 && selfiePreview)
 
   const handleSelfieChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -76,6 +84,17 @@ export default function Home() {
       setSelfiePreview(null)
       setError(err instanceof Error ? err.message : 'ફોટો પ્રોસેસ કરવામાં સમસ્યા આવી')
     }
+  }
+
+  const downloadPoster = () => {
+    if (!posterDataUrl) return
+
+    const link = document.createElement('a')
+    link.href = posterDataUrl
+    link.download = `parshuram-shobhayatra-${(name || 'poster').trim().replace(/\s+/g, '-')}.png`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
   }
 
   const handleSave = async () => {
@@ -99,18 +118,21 @@ export default function Home() {
         const data = await response.json().catch(() => ({}))
         throw new Error(data?.error || 'નોંધણી સેવ થઈ નહીં, ફરી પ્રયાસ કરો')
       }
+
+      downloadPoster()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'નોંધણી કરવામાં સમસ્યા આવી')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
-    <div>
+    <div style={themeVars}>
       {/* Header */}
       <header className="app-header">
         <div className="header-om">ॐ</div>
-        <h1 className="header-title">ભગ.શ્રી. પ. જ. શોભાયાત્રા ૨૦૨૬</h1>
+        <h1 className="header-title">ભગવાનશ્રી પરશુરામ જન્મોત્સવ શોભાયાત્રા ૨૦૨૬</h1>
         <p className="header-sub">|| જય પરશુરામ || • ૧૯ એપ્રિ. ૨૦૨૬, રવિ. ||</p>
       </header>
 
@@ -121,18 +143,14 @@ export default function Home() {
         <div className="card">
           <div className="card-header">
             <span className="card-header-icon">🖼️</span>
-            <span className="card-header-title">તમારું પોસ્ટર (લાઇવ પ્રિવ્યૂ)</span>
-            <span className="card-header-badge">LIVE</span>
+            <span className="card-header-title">પોસ્ટર પ્રિવ્યૂ</span>
           </div>
           <div className="card-body">
-            <div className="live-badge">
-              <span className="live-dot" />
-              ફોર્મ ભરવાથી પ્રિવ્યૂ તરત અપડેટ થાય છે
-            </div>
+            <div className="live-badge">પ્રિવ્યૂ</div>
             <div className="preview-canvas-wrap">
               <PosterCanvas
+                templateId={templateId}
                 name={name}
-                mobile={mobile}
                 selfieUrl={selfiePreview || ''}
                 onReady={setPosterDataUrl}
               />
@@ -146,7 +164,7 @@ export default function Home() {
                   download={`parshuram-shobhayatra-${(name || 'poster').replace(/\s+/g, '-')}.png`}
                   className="btn-download"
                 >
-                  ⬇️ પોસ્ટર ડાઉનલોડ કરો (ગૅલેરીમાં સેવ)
+                  ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
                 </a>
                 <ShareButtons name={name} posterDataUrl={posterDataUrl} />
               </div>
@@ -161,9 +179,38 @@ export default function Home() {
             <span className="card-header-title">તમારી માહિતી ભરો</span>
           </div>
           <div className="card-body">
-            <p style={{ fontSize: '0.82rem', color: '#888', marginBottom: 18, lineHeight: 1.5 }}>
-              નીચે તમારી માહિતી ભરો — પ્રિવ્યૂ ઉપર આપોઆપ અપડેટ થઈ જશે! 🎨
-            </p>
+            <div className="form-field">
+              <label className="form-label">🎨 પોસ્ટર ટેમ્પલેટ *</label>
+              <div className="template-grid" role="radiogroup" aria-label="Poster template">
+                {posterTemplates.map(template => {
+                  const checked = template.id === templateId
+
+                  return (
+                    <label
+                      key={template.id}
+                      className={`template-option${checked ? ' template-option-active' : ''}`}
+                    >
+                      <input
+                        type="radio"
+                        name="poster-template"
+                        value={template.id}
+                        checked={checked}
+                        onChange={() => setTemplateId(template.id)}
+                      />
+                      <img
+                        src={template.image.src}
+                        alt={template.label}
+                        className="template-option-image"
+                      />
+                      <span className="template-option-meta">
+                        <span className="template-option-title">{template.label}</span>
+                        <span className="template-option-subtitle">{template.subtitle}</span>
+                      </span>
+                    </label>
+                  )
+                })}
+              </div>
+            </div>
 
             {/* Selfie */}
             <div className="form-field">
@@ -201,7 +248,7 @@ export default function Home() {
               <input
                 className="form-input"
                 type="text"
-                placeholder="તમારું પૂરું નામ લખો"
+                placeholder="પોસ્ટર માટે તમારું પૂરું નામ લખો"
                 value={name}
                 onChange={e => setName(e.target.value)}
                 maxLength={40}
@@ -224,7 +271,7 @@ export default function Home() {
             {error && <div className="error-box">⚠️ {error}</div>}
 
             <button className="btn-primary" onClick={handleSave} disabled={loading}>
-              {loading ? '⏳ સેવ કરી રહ્યા છીએ...' : '✅ નોંધણી કરો & ડાઉનલોડ કરો'}
+              {loading ? '⏳ પોસ્ટર તૈયાર થઈ રહ્યું છે...' : isFormValid ? '⬇️ પોસ્ટર ડાઉનલોડ કરો' : '✅ માહિતી ભરો અને આગળ વધો'}
             </button>
 
             <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.72rem', marginTop: 12 }}>
@@ -236,7 +283,7 @@ export default function Home() {
 
       <footer className="app-footer">
         <div className="footer-main">⚔️ જય પરશુરામ 🙏</div>
-        <p>ભગ.શ્રી. પ. જ. શોભાયાત્રા ૨૦૨૬ | શૅર કરો & સંદેશ ફેલાવો</p>
+        <p>ભગવાનશ્રી પરશુરામ જન્મોત્સવ શોભાયાત્રા ૨૦૨૬ | શૅર કરો & સંદેશ ફેલાવો</p>
       </footer>
     </div>
   )

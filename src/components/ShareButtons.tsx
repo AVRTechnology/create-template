@@ -6,41 +6,53 @@ interface ShareButtonsProps {
 }
 
 export default function ShareButtons({ name, posterDataUrl }: ShareButtonsProps) {
+  const shareMessage =
+    `${name ? `${name} તરફથી ` : ''}ભગવાનશ્રી પરશુરામ જન્મોત્સવ શોભાયાત્રા ૨૦૨૬નું પોસ્ટર જુઓ અને તમે પણ જોડાઓ.`
   const shareText = encodeURIComponent(
-    `🙏 હું ભગ.શ્રી. પ. જ. શોભાયાત્રામાં સામેલ છું!\n` +
-    `I am joining Parshuram Shobhayatra 2026! 🚩⚔️\n` +
-    `#JaiParshuram #ParshuramShobhayatra2026`
+    `${shareMessage}\n#JaiParshuram #ParshuramShobhayatra2026`
   )
-  const pageUrl = encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')
-  const waUrl = `https://api.whatsapp.com/send?text=${shareText}%20${pageUrl}`
+  const pageUrlRaw = typeof window !== 'undefined' ? window.location.href : ''
+  const pageUrl = encodeURIComponent(pageUrlRaw)
+  const waUrl = `https://wa.me/?text=${shareText}%20${pageUrl}`
+  const waAppUrl = `whatsapp://send?text=${shareText}%20${pageUrl}`
   const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${pageUrl}&quote=${shareText}`
+  const fbAppUrl = `fb://facewebmodal/f?href=${encodeURIComponent(fbUrl)}`
+  const igUrl = 'https://www.instagram.com/'
+  const igAppUrl = 'instagram://camera'
 
-  const shareFile = async () => {
-    if (navigator.share && posterDataUrl) {
-      try {
-        const blob = await fetch(posterDataUrl).then(r => r.blob())
-        const file = new File([blob], 'parshuram-shobhayatra-2026.png', { type: 'image/png' })
-        if (navigator.canShare?.({ files: [file] })) {
-          await navigator.share({ files: [file], title: 'ભ.શ્રી. પ. જ. શોભ.', text: decodeURIComponent(shareText) })
-          return true
-        }
-      } catch { /* fallback below */ }
+  const openAppWithFallback = (appUrl: string, fallbackUrl: string) => {
+    const timer = window.setTimeout(() => {
+      window.location.href = fallbackUrl
+    }, 900)
+
+    const clearTimer = () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', clearOnHidden)
     }
-    return false
+
+    const clearOnHidden = () => {
+      if (document.hidden) {
+        clearTimer()
+      }
+    }
+
+    document.addEventListener('visibilitychange', clearOnHidden)
+    window.location.href = appUrl
   }
 
-  const handleWhatsApp = async () => {
-    if (!await shareFile()) window.open(waUrl, '_blank')
+  const handleWhatsApp = () => {
+    if (!posterDataUrl) return
+    openAppWithFallback(waAppUrl, waUrl)
   }
 
-  const handleFacebook = () => window.open(fbUrl, '_blank', 'width=600,height=400')
+  const handleFacebook = () => {
+    if (!posterDataUrl) return
+    openAppWithFallback(fbAppUrl, fbUrl)
+  }
 
-  const handleInstagram = async () => {
-    if (!await shareFile()) {
-      window.location.href = 'instagram://camera'
-      setTimeout(() => window.open('https://www.instagram.com', '_blank'), 1500)
-      alert('📸 પહેલા ડાઉ. / ઇ.ઇ. કરી Instagram Story+Status માં શૅર કરો!')
-    }
+  const handleInstagram = () => {
+    if (!posterDataUrl) return
+    openAppWithFallback(igAppUrl, igUrl)
   }
 
   return (
@@ -79,7 +91,7 @@ export default function ShareButtons({ name, posterDataUrl }: ShareButtonsProps)
           fontFamily: '"Noto Sans Gujarati", sans-serif',
         }}
       >
-        📲 WhatsApp Status પર ઇ.ઇ. લિંક શૅર કરો
+        📲 WhatsApp ખોલી કોન્ટેક્ટ અથવા સ્ટેટસમાં શેર કરો
       </a>
     </div>
   )
