@@ -4,6 +4,57 @@ import { useState, useRef } from 'react'
 import PosterCanvas from '@/components/PosterCanvas'
 import ShareButtons from '@/components/ShareButtons'
 
+const MAX_SELFIE_BYTES = 3 * 1024 * 1024
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result as string)
+    reader.onerror = () => reject(new Error('Failed to read image'))
+    reader.readAsDataURL(file)
+  })
+}
+
+function imageElementFromDataUrl(dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Failed to load image'))
+    img.src = dataUrl
+  })
+}
+
+async function compressIfNeeded(file: File): Promise<string> {
+  if (file.size <= MAX_SELFIE_BYTES) {
+    return fileToDataUrl(file)
+  }
+
+  const sourceDataUrl = await fileToDataUrl(file)
+  const img = await imageElementFromDataUrl(sourceDataUrl)
+  const canvas = document.createElement('canvas')
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas is not available')
+
+  const maxDimension = 1600
+  const scale = Math.min(1, maxDimension / Math.max(img.width, img.height))
+  canvas.width = Math.max(1, Math.round(img.width * scale))
+  canvas.height = Math.max(1, Math.round(img.height * scale))
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+
+  let quality = 0.9
+  let compressed = canvas.toDataURL('image/jpeg', quality)
+  while (quality >= 0.5) {
+    const bytes = Math.ceil((compressed.length - 'data:image/jpeg;base64,'.length) * 3 / 4)
+    if (bytes <= MAX_SELFIE_BYTES) {
+      return compressed
+    }
+    quality -= 0.1
+    compressed = canvas.toDataURL('image/jpeg', quality)
+  }
+
+  throw new Error('Image is too large. Please choose a smaller photo.')
+}
+
 export default function Home() {
   const [name, setName] = useState('')
   const [mobile, setMobile] = useState('')
@@ -13,14 +64,18 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleSelfieChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSelfieChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 5 * 1024 * 1024) { setError('ફોટો 5MB કરતા ઓછો હોવો જોઈએ'); return }
     setError('')
-    const reader = new FileReader()
-    reader.onload = (ev) => setSelfiePreview(ev.target?.result as string)
-    reader.readAsDataURL(file)
+
+    try {
+      const selfieDataUrl = await compressIfNeeded(file)
+      setSelfiePreview(selfieDataUrl)
+    } catch (err) {
+      setSelfiePreview(null)
+      setError(err instanceof Error ? err.message : 'ફોટો પ્રોસેસ કરવામાં સમસ્યા આવી')
+    }
   }
 
   const handleSave = async () => {
@@ -30,12 +85,23 @@ export default function Home() {
     setError('')
     setLoading(true)
     try {
-      await fetch('/api/register', {
+      const response = await fetch('/api/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: name.trim(), mobile: mobile.trim(), timestamp: new Date().toISOString() }),
+        body: JSON.stringify({
+          name: name.trim(),
+          mobile: mobile.trim(),
+          selfieBase64: selfiePreview,
+          timestamp: new Date().toISOString(),
+        }),
       })
-    } catch { /* non-fatal */ }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data?.error || 'નોંધણી સેવ થઈ નહીં, ફરી પ્રયાસ કરો')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'નોંધણી કરવામાં સમસ્યા આવી')
+    }
     setLoading(false)
   }
 
@@ -115,7 +181,7 @@ export default function Home() {
                   <>
                     <span className="upload-icon">🤳</span>
                     <p className="upload-text">ક્લિક કરો - ફોટો અપલોડ કરો</p>
-                    <p className="upload-hint">JPG, PNG • મહ. 5MB</p>
+                    <p className="upload-hint">JPG, PNG • મહ. 3MB (મોટું હોય તો auto-compress)</p>
                   </>
                 )}
               </div>

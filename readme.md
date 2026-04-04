@@ -7,6 +7,7 @@ A free web app where 10,000+ users can create and share personalized Parshuram S
 - ⬇️ Download poster as image (save to gallery)
 - 📤 Share on WhatsApp, Facebook, Instagram
 - 💾 Data saved to Google Sheets (free)
+- ☁️ Selfie uploaded to Cloudinary with renamed filename
 - 📱 Mobile-first, works on all devices
 
 ---
@@ -75,7 +76,18 @@ function doGet(e) {
 ### Add to Vercel:
 1. Go to Vercel → Your Project → Settings → Environment Variables
 2. Add: `GOOGLE_SHEET_URL` = `(paste your Apps Script URL)`
-3. Redeploy
+3. Add Cloudinary vars:
+   - `CLOUDINARY_CLOUD_NAME`
+   - `CLOUDINARY_API_KEY`
+   - `CLOUDINARY_API_SECRET`
+   - `CLOUDINARY_FOLDER` (optional)
+4. Redeploy
+
+### Important Apps Script Access Setting
+- For server-to-server `fetch` from this app, deploy Web App with:
+  - Execute as: **Me**
+  - Who has access: **Anyone**
+- `Only myself` usually blocks backend requests from Next.js/Vercel.
 
 ---
 

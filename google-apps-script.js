@@ -19,10 +19,10 @@ function doPost(e) {
     
     // Add headers if sheet is empty
     if (sheet.getLastRow() === 0) {
-      sheet.appendRow(['Timestamp', 'Name', 'Mobile', 'Photo Status', 'Date']);
-      sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
-      sheet.getRange(1, 1, 1, 5).setBackground('#FF6B00');
-      sheet.getRange(1, 1, 1, 5).setFontColor('white');
+      sheet.appendRow(['Timestamp', 'Name', 'Mobile', 'Selfie URL', 'File Name', 'Date']);
+      sheet.getRange(1, 1, 1, 6).setFontWeight('bold');
+      sheet.getRange(1, 1, 1, 6).setBackground('#FF6B00');
+      sheet.getRange(1, 1, 1, 6).setFontColor('white');
     }
     
     var now = new Date();
@@ -35,12 +35,13 @@ function doPost(e) {
       data.timestamp || now.toISOString(),
       data.name || 'Unknown',
       data.mobile || 'Unknown',
-      data.selfieBase64 ? 'Photo Uploaded ✓' : 'No Photo',
+      data.selfieUrl || '',
+      data.fileName || '',
       dateStr
     ]);
     
     // Auto-resize columns
-    sheet.autoResizeColumns(1, 5);
+    sheet.autoResizeColumns(1, 6);
     
     return ContentService
       .createTextOutput(JSON.stringify({ 
