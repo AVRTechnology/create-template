@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, type CSSProperties } from 'react'
+import { useState, useRef, useEffect, type CSSProperties } from 'react'
 import PosterCanvas from '@/components/PosterCanvas'
 import ShareButtons from '@/components/ShareButtons'
 import { getPosterTemplate, posterTemplates, type PosterTemplateId } from '@/lib/posterTemplates'
@@ -72,7 +72,9 @@ export default function Home() {
   const [posterDataUrl, setPosterDataUrl] = useState<string>('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [selfiePickerOpen, setSelfiePickerOpen] = useState(false)
+  const cameraInputRef = useRef<HTMLInputElement>(null)
+  const galleryInputRef = useRef<HTMLInputElement>(null)
   const selectedTemplate = getPosterTemplate(templateId)
   const themeVars = {
     '--template-primary': selectedTemplate.primaryColor,
@@ -84,8 +86,10 @@ export default function Home() {
 
   const handleSelfieChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
+    e.target.value = ''
     if (!file) return
     setError('')
+    setSelfiePickerOpen(false)
 
     try {
       const selfieDataUrl = await compressIfNeeded(file)
@@ -94,6 +98,37 @@ export default function Home() {
       setSelfiePreview(null)
       setError(err instanceof Error ? err.message : 'ફોટો પ્રોસેસ કરવામાં સમસ્યા આવી')
     }
+  }
+
+  useEffect(() => {
+    if (!selfiePickerOpen) return
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') setSelfiePickerOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selfiePickerOpen])
+
+  useEffect(() => {
+    if (!selfiePickerOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = prev
+    }
+  }, [selfiePickerOpen])
+
+  const openSelfiePicker = () => setSelfiePickerOpen(true)
+
+  /** Keep click in same user-gesture tick so mobile browsers allow the file picker. */
+  const pickFromCamera = () => {
+    cameraInputRef.current?.click()
+    setSelfiePickerOpen(false)
+  }
+
+  const pickFromGallery = () => {
+    galleryInputRef.current?.click()
+    setSelfiePickerOpen(false)
   }
 
   const downloadPoster = () => {
@@ -196,14 +231,20 @@ export default function Home() {
             {/* Selfie */}
             <div className="form-field">
               <label className="form-label">📸 તમારો ફોટો *</label>
-              <div
-                className="selfie-upload-area"
-                onClick={() => fileInputRef.current?.click()}
-              >
+              <div className="selfie-upload-area" onClick={openSelfiePicker}>
                 {selfiePreview ? (
                   <div className="selfie-preview-wrap">
                     <img src={selfiePreview} alt="preview" className="selfie-preview-img" />
-                    <button className="selfie-change-btn" onClick={e => { e.stopPropagation(); fileInputRef.current?.click() }}>✎</button>
+                    <button
+                      type="button"
+                      className="selfie-change-btn"
+                      onClick={e => {
+                        e.stopPropagation()
+                        openSelfiePicker()
+                      }}
+                    >
+                      ✎
+                    </button>
                   </div>
                 ) : (
                   <>
@@ -214,10 +255,17 @@ export default function Home() {
                 )}
               </div>
               <input
-                ref={fileInputRef}
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="user"
+                onChange={handleSelfieChange}
+                style={{ display: 'none' }}
+              />
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*"
                 onChange={handleSelfieChange}
                 style={{ display: 'none' }}
               />
@@ -310,6 +358,47 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {selfiePickerOpen && (
+        <div
+          className="selfie-picker-backdrop"
+          onClick={() => setSelfiePickerOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="selfie-picker-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="selfie-picker-heading"
+            onClick={e => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="selfie-picker-dismiss"
+              onClick={() => setSelfiePickerOpen(false)}
+              aria-label="બંધ કરો"
+            >
+              ×
+            </button>
+            <h2 id="selfie-picker-heading" className="selfie-picker-title">
+              ફોટો કેવી રીતે ઉમેરશો?
+            </h2>
+            <p className="selfie-picker-sub">કેમેરો અથવા ગેલેરી — તમારી પસંદ</p>
+            <div className="selfie-picker-grid">
+              <button type="button" className="selfie-picker-card selfie-picker-card-camera" onClick={pickFromCamera}>
+                <span className="selfie-picker-card-icon" aria-hidden>📷</span>
+                <span className="selfie-picker-card-label">સેલ્ફી / કેમેરો</span>
+                <span className="selfie-picker-card-hint">હમણાં ફોટો લો</span>
+              </button>
+              <button type="button" className="selfie-picker-card selfie-picker-card-gallery" onClick={pickFromGallery}>
+                <span className="selfie-picker-card-icon" aria-hidden>🖼️</span>
+                <span className="selfie-picker-card-label">ગેલેરી / ફાઇલો</span>
+                <span className="selfie-picker-card-hint">સાચવેલો ફોટો પસંદ કરો</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <footer className="app-footer">
         <div className="footer-main">⚔️ જય પરશુરામ 🙏</div>
