@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react'
 import {
   POSTER_DESIGN_SIZE,
   getPosterTemplate,
+  type PosterTemplate,
   type PosterTemplateId,
 } from '@/lib/posterTemplates'
 
@@ -119,10 +120,16 @@ async function drawSelfie(
   selfieUrl: string,
   templateId: PosterTemplateId,
   scaleX: number,
-  scaleY: number
+  scaleY: number,
+  /** Design-space px: nudge photo right when name is long (stays inside canvas) */
+  selfieCxOffsetDesign: number
 ) {
   const template = getPosterTemplate(templateId)
-  const cx = template.selfie.cx * scaleX
+  const cxDesign = Math.min(
+    POSTER_DESIGN_SIZE.width - template.selfie.radius - 8,
+    Math.max(template.selfie.radius + 8, template.selfie.cx + selfieCxOffsetDesign)
+  )
+  const cx = cxDesign * scaleX
   const cy = template.selfie.cy * scaleY
   const radius = template.selfie.radius * Math.min(scaleX, scaleY)
 
@@ -177,22 +184,62 @@ async function drawSelfie(
   ctx.restore()
 }
 
+/**
+ * Wider name badge when text is long; keep inside banner, left of selfie.
+ * Long names: nudge selfie slightly right (design px) so layout stays balanced.
+ */
+function layoutNameBox(
+  ctx: CanvasRenderingContext2D,
+  template: PosterTemplate,
+  name: string
+): { boxX: number; boxY: number; boxW: number; boxH: number; radius: number; label: string; selfieCxOffsetDesign: number } {
+  const { nameBox: nb, selfie } = template
+  const label = (name.trim() || 'તમારું નામ').slice(0, 40)
+  const maxRight = selfie.cx - selfie.radius - 14
+  const minLeft = 215
+  const pad = 28
+
+  ctx.font = '800 14px "Noto Sans Gujarati", sans-serif'
+  const minFontWidth = ctx.measureText(label).width + pad
+
+  let boxW = Math.max(nb.width, Math.min(minFontWidth, maxRight - nb.x))
+  let boxX = nb.x
+
+  if (boxX + boxW > maxRight) {
+    boxX = Math.max(minLeft, maxRight - boxW)
+  }
+
+  boxW = Math.min(boxW, maxRight - boxX)
+  boxX = Math.max(minLeft, Math.min(boxX, maxRight - boxW))
+
+  const selfieCxOffsetDesign = label.length >= 26 ? 8 : 0
+
+  return {
+    boxX,
+    boxY: nb.y,
+    boxW,
+    boxH: nb.height,
+    radius: nb.radius,
+    label,
+    selfieCxOffsetDesign,
+  }
+}
+
 function drawNameBox(
   ctx: CanvasRenderingContext2D,
-  templateId: PosterTemplateId,
-  name: string,
+  template: PosterTemplate,
+  layout: { boxX: number; boxY: number; boxW: number; boxH: number; radius: number; label: string },
   scaleX: number,
   scaleY: number
 ) {
-  const template = getPosterTemplate(templateId)
-  const { nameBox } = template
   const scale = Math.min(scaleX, scaleY)
-  const x = nameBox.x * scaleX
-  const y = nameBox.y * scaleY
-  const width = nameBox.width * scaleX
-  const height = nameBox.height * scaleY
-  const radius = nameBox.radius * scale
-  const label = (name.trim() || 'તમારું નામ').slice(0, 30)
+  const { nameBox } = template
+  const x = layout.boxX * scaleX
+  const y = layout.boxY * scaleY
+  const width = layout.boxW * scaleX
+  const height = layout.boxH * scaleY
+  const radius = layout.radius * scale
+  const label = layout.label
 
   ctx.save()
   ctx.shadowColor = 'rgba(0, 0, 0, 0.18)'
@@ -256,8 +303,9 @@ export default function PosterCanvas({ templateId, name, selfieUrl, onReady }: P
       const scaleX = width / POSTER_DESIGN_SIZE.width
       const scaleY = height / POSTER_DESIGN_SIZE.height
 
-      drawNameBox(ctx, templateId, name, scaleX, scaleY)
-      await drawSelfie(ctx, selfieUrl, templateId, scaleX, scaleY)
+      const layout = layoutNameBox(ctx, template, name)
+      drawNameBox(ctx, template, layout, scaleX, scaleY)
+      await drawSelfie(ctx, selfieUrl, templateId, scaleX, scaleY, layout.selfieCxOffsetDesign)
 
       if (!active) return
       onReady(canvas.toDataURL('image/png'))

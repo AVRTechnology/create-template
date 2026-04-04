@@ -6,6 +6,14 @@ import ShareButtons from '@/components/ShareButtons'
 import { getPosterTemplate, posterTemplates, type PosterTemplateId } from '@/lib/posterTemplates'
 
 const MAX_SELFIE_BYTES = 3 * 1024 * 1024
+/** Full name (e.g. surname + name) — length must stay in this range for poster + download. */
+const NAME_MIN = 30
+const NAME_MAX = 40
+
+function isValidNameLength(value: string) {
+  const t = value.trim()
+  return t.length >= NAME_MIN && t.length <= NAME_MAX
+}
 
 function fileToDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -70,7 +78,9 @@ export default function Home() {
     '--template-primary': selectedTemplate.primaryColor,
     '--template-secondary': selectedTemplate.secondaryColor,
   } as CSSProperties
-  const isFormValid = Boolean(name.trim() && mobile.trim().length === 10 && selfiePreview)
+  const isFormValid = Boolean(
+    isValidNameLength(name) && mobile.trim().length === 10 && selfiePreview
+  )
 
   const handleSelfieChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -98,8 +108,12 @@ export default function Home() {
   }
 
   const handleSave = async () => {
-    if (!name.trim()) { setError('કૃપया તમારું નામ દાખલ કરો'); return }
-    if (!mobile.trim() || mobile.length < 10) { setError('કૃપया માન્ય મોબાઇલ નંબર દાખલ કરો'); return }
+    if (!name.trim()) { setError('કૃપા કરી તમારું નામ દાખલ કરો'); return }
+    if (!isValidNameLength(name)) {
+      setError(`પૂરું નામ ${NAME_MIN} થી ${NAME_MAX} અક્ષર વચ્ચે લખો (શ્રીનામ + નામ).`)
+      return
+    }
+    if (!mobile.trim() || mobile.length < 10) { setError('કૃપા કરી માન્ય મોબાઇલ નંબર દાખલ કરો'); return }
     if (!selfiePreview) { setError('કૃપા કરી તમારો ફોટો અપલોડ કરો'); return }
     setError('')
     setLoading(true)
@@ -215,11 +229,18 @@ export default function Home() {
               <input
                 className="form-input"
                 type="text"
-                placeholder="પોસ્ટર માટે તમારું પૂરું નામ લખો"
+                placeholder={`પૂરું નામ (${NAME_MIN}–${NAME_MAX} અક્ષર)`}
                 value={name}
                 onChange={e => setName(e.target.value)}
-                maxLength={40}
+                maxLength={NAME_MAX}
+                minLength={NAME_MIN}
+                aria-invalid={name.trim().length > 0 && !isValidNameLength(name)}
               />
+              {name.trim().length > 0 && !isValidNameLength(name) && (
+                <p className="field-hint field-hint-warn">
+                  શ્રીનામ સહિત પૂરું નામ — {NAME_MIN} થી {NAME_MAX} અક્ષર
+                </p>
+              )}
             </div>
 
             {/* Mobile */}
@@ -266,14 +287,24 @@ export default function Home() {
 
             {posterDataUrl && (
               <div className="preview-actions">
-                <a
-                  href={posterDataUrl}
-                  download={`parshuram-shobhayatra-${(name || 'poster').replace(/\s+/g, '-')}.png`}
-                  className="btn-download"
-                >
-                  ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
-                </a>
-                <ShareButtons name={name} posterDataUrl={posterDataUrl} />
+                {isFormValid ? (
+                  <a
+                    href={posterDataUrl}
+                    download={`parshuram-shobhayatra-${(name || 'poster').trim().replace(/\s+/g, '-')}.png`}
+                    className="btn-download"
+                  >
+                    ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
+                  </a>
+                ) : (
+                  <span className="btn-download btn-download-disabled" role="status" title="પહેલા ફોર્મ ભરો">
+                    ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
+                  </span>
+                )}
+                <ShareButtons
+                  name={name}
+                  posterDataUrl={posterDataUrl}
+                  shareEnabled={isFormValid}
+                />
               </div>
             )}
           </div>
