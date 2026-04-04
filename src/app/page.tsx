@@ -6,6 +6,8 @@ import ShareButtons from '@/components/ShareButtons'
 import { getPosterTemplate, posterTemplates, type PosterTemplateId } from '@/lib/posterTemplates'
 
 const MAX_SELFIE_BYTES = 3 * 1024 * 1024
+/** Viewport width at or below this uses the camera + gallery sheet; above opens file picker only (no camera). */
+const SELFIE_MOBILE_MAX_PX = 724
 /** Full name (e.g. surname + name) — length must stay in this range for poster + download. */
 const NAME_MIN = 30
 const NAME_MAX = 40
@@ -118,7 +120,22 @@ export default function Home() {
     }
   }, [selfiePickerOpen])
 
-  const openSelfiePicker = () => setSelfiePickerOpen(true)
+  useEffect(() => {
+    const onResize = () => {
+      if (window.innerWidth > SELFIE_MOBILE_MAX_PX) setSelfiePickerOpen(false)
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  /** Wide screens: open system file picker only. Narrow (phones / small tablets): show camera vs gallery sheet. */
+  const openSelfiePicker = () => {
+    if (typeof window !== 'undefined' && window.innerWidth > SELFIE_MOBILE_MAX_PX) {
+      galleryInputRef.current?.click()
+      return
+    }
+    setSelfiePickerOpen(true)
+  }
 
   /** Keep click in same user-gesture tick so mobile browsers allow the file picker. */
   const pickFromCamera = () => {

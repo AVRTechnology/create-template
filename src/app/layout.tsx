@@ -4,6 +4,10 @@ import type { Metadata } from 'next'
 export const metadata: Metadata = {
   title: 'ભગવાનશ્રી પરશુરામ જન્મોત્સવ શોભાયાત્રા ૨૦૨૬',
   description: 'પ. બ્ર. સ. ૨૦૨૬ - ​તા. ૧૯-૦૪-૨૦૨૬, રવિવાર - તમારું પોસ્ટર બનાવો અને શૅર કરો!',
+  icons: {
+    icon: '/om-favicon.png',
+    apple: '/om-favicon.png',
+  },
   openGraph: {
     title: 'ભગ.શ્રી. પ. જ. ‍શોભાયાત્રા ૨૦૨૬ 🙏',
     description: 'હું આ શોભાયત્રામાં સામેલ છું! તમે પણ આવો!',
