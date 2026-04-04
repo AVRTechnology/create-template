@@ -49,6 +49,51 @@ function buildHeaders(sheet, extraFields) {
   return headers;
 }
 
+function migrateLegacyRowsIfNeeded(sheet, headers) {
+  var lastRow = sheet.getLastRow();
+  var lastColumn = sheet.getLastColumn();
+  if (lastRow < 1 || lastColumn < 1) return;
+
+  var currentHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  var hasLegacyTimestamp = currentHeaders.indexOf('Timestamp') !== -1;
+  var hasLegacyPhotoStatus = currentHeaders.indexOf('Photo Status') !== -1;
+  if (!hasLegacyTimestamp && !hasLegacyPhotoStatus) return;
+
+  var timestampIdx = currentHeaders.indexOf('Timestamp');
+  var nameIdx = currentHeaders.indexOf('Name');
+  var mobileIdx = currentHeaders.indexOf('Mobile');
+  var imageUrlIdx = currentHeaders.indexOf('Image URL');
+  var selfieUrlIdx = currentHeaders.indexOf('Selfie URL');
+
+  var migratedRows = [];
+  if (lastRow > 1) {
+    var values = sheet.getRange(2, 1, lastRow - 1, lastColumn).getValues();
+    for (var i = 0; i < values.length; i++) {
+      var row = values[i];
+      var rawTs = timestampIdx >= 0 ? row[timestampIdx] : '';
+      var tsMillis = new Date(rawTs).getTime();
+      if (!isFinite(tsMillis)) tsMillis = Date.now() + i;
+      var recordId = 'rec_' + tsMillis;
+      var imageUrl = '';
+      if (imageUrlIdx >= 0 && row[imageUrlIdx]) imageUrl = row[imageUrlIdx];
+      if (!imageUrl && selfieUrlIdx >= 0 && row[selfieUrlIdx]) imageUrl = row[selfieUrlIdx];
+
+      migratedRows.push([
+        recordId,
+        nameIdx >= 0 ? row[nameIdx] : '',
+        mobileIdx >= 0 ? row[mobileIdx] : '',
+        imageUrl
+      ]);
+    }
+  }
+
+  sheet.clearContents();
+  ensureHeaders(sheet, headers);
+  if (migratedRows.length > 0) {
+    sheet.getRange(2, 1, migratedRows.length, BASE_HEADERS.length).setValues(migratedRows);
+  }
+}
+
 function ensureHeaders(sheet, headers) {
   var totalColumns = Math.max(sheet.getMaxColumns(), headers.length);
   if (sheet.getMaxColumns() < totalColumns) {
@@ -128,6 +173,7 @@ function doPost(e) {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     var data = JSON.parse(e.postData.contents || '{}');
     var headers = buildHeaders(sheet, data.extraFields);
+    migrateLegacyRowsIfNeeded(sheet, headers);
     ensureHeaders(sheet, headers);
 
     var action = (data.action || 'add').toLowerCase();
@@ -161,6 +207,7 @@ function doPost(e) {
 function doGet(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   var headers = buildHeaders(sheet, null);
+  migrateLegacyRowsIfNeeded(sheet, headers);
   ensureHeaders(sheet, headers);
   var count = Math.max(0, sheet.getLastRow() - 1); // subtract header row
   
