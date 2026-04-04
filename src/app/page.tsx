@@ -136,43 +136,10 @@ export default function Home() {
         <p className="header-sub">|| જય પરશુરામ || • ૧૯ એપ્રિ. ૨૦૨૬, રવિ. ||</p>
       </header>
 
-      {/* Main - Preview card FIRST, Form card SECOND */}
+      {/* Main: form first on mobile; desktop grid order keeps preview left */}
       <main className="page-wrapper">
 
-        {/* ─── CARD 1: LIVE POSTER PREVIEW ─── */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-header-icon">🖼️</span>
-            <span className="card-header-title">પોસ્ટર પ્રિવ્યૂ</span>
-          </div>
-          <div className="card-body">
-            <div className="live-badge">પ્રિવ્યૂ</div>
-            <div className="preview-canvas-wrap">
-              <PosterCanvas
-                templateId={templateId}
-                name={name}
-                selfieUrl={selfiePreview || ''}
-                onReady={setPosterDataUrl}
-              />
-            </div>
-
-            {/* Download + Share always visible when poster has data */}
-            {posterDataUrl && (
-              <div className="preview-actions">
-                <a
-                  href={posterDataUrl}
-                  download={`parshuram-shobhayatra-${(name || 'poster').replace(/\s+/g, '-')}.png`}
-                  className="btn-download"
-                >
-                  ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
-                </a>
-                <ShareButtons name={name} posterDataUrl={posterDataUrl} />
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* ─── CARD 2: INPUT FORM ─── */}
+        {/* ─── CARD 1: INPUT FORM ─── */}
         <div className="card form-card-wrap">
           <div className="card-header">
             <span className="card-header-icon">✍️</span>
@@ -277,6 +244,38 @@ export default function Home() {
             <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.72rem', marginTop: 12 }}>
               🔒 તમારી માહિતી સુરક્ષિત છે. ફક્ત શોભાયાત્રા રેકોર્ડ માટે.
             </p>
+          </div>
+        </div>
+
+        {/* ─── CARD 2: POSTER PREVIEW ─── */}
+        <div className="card card-preview">
+          <div className="card-header">
+            <span className="card-header-icon">🖼️</span>
+            <span className="card-header-title">પોસ્ટર પ્રિવ્યૂ</span>
+          </div>
+          <div className="card-body">
+            <div className="live-badge">પ્રિવ્યૂ</div>
+            <div className="preview-canvas-wrap">
+              <PosterCanvas
+                templateId={templateId}
+                name={name}
+                selfieUrl={selfiePreview || ''}
+                onReady={setPosterDataUrl}
+              />
+            </div>
+
+            {posterDataUrl && (
+              <div className="preview-actions">
+                <a
+                  href={posterDataUrl}
+                  download={`parshuram-shobhayatra-${(name || 'poster').replace(/\s+/g, '-')}.png`}
+                  className="btn-download"
+                >
+                  ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
+                </a>
+                <ShareButtons name={name} posterDataUrl={posterDataUrl} />
+              </div>
+            )}
           </div>
         </div>
       </main>
