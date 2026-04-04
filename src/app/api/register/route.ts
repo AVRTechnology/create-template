@@ -145,18 +145,23 @@ export async function POST(request: NextRequest) {
     })
 
     try {
-      await sendToSheet({
+      const sheetResult = await sendToSheet({
         action: 'add',
         recordId,
         name,
         mobile,
         selfieUrl,
-        fileName,
-        createdAt: normalizedTimestamp,
       })
+      if (!sheetResult || sheetResult.schemaVersion !== 2 || sheetResult.action !== 'add') {
+        throw new Error('Apps Script deployment is outdated. Please redeploy latest script.')
+      }
     } catch (sheetError) {
       console.error('Sheet save error:', sheetError)
-      return NextResponse.json({ error: 'Could not save to Google Sheet' }, { status: 502 })
+      const message =
+        sheetError instanceof Error && sheetError.message.includes('outdated')
+          ? 'Apps Script is outdated. Redeploy latest Apps Script web app.'
+          : 'Could not save to Google Sheet'
+      return NextResponse.json({ error: message }, { status: 502 })
     }
 
     return NextResponse.json({
@@ -183,6 +188,9 @@ export async function DELETE(request: NextRequest) {
 
     try {
       const sheetResult = await sendToSheet({ action: 'delete', recordId })
+      if (!sheetResult || sheetResult.schemaVersion !== 2 || sheetResult.action !== 'delete') {
+        throw new Error('Apps Script deployment is outdated. Please redeploy latest script.')
+      }
       return NextResponse.json({
         success: true,
         message: 'Record deleted',
@@ -191,7 +199,11 @@ export async function DELETE(request: NextRequest) {
       })
     } catch (sheetError) {
       console.error('Sheet delete error:', sheetError)
-      return NextResponse.json({ error: 'Could not delete from Google Sheet' }, { status: 502 })
+      const message =
+        sheetError instanceof Error && sheetError.message.includes('outdated')
+          ? 'Apps Script is outdated. Redeploy latest Apps Script web app.'
+          : 'Could not delete from Google Sheet'
+      return NextResponse.json({ error: message }, { status: 502 })
     }
   } catch (error) {
     console.error('API Delete Error:', error)

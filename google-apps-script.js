@@ -12,13 +12,55 @@
  * 6. Add it to Vercel as GOOGLE_SHEET_URL environment variable
  */
 
-function ensureHeaders(sheet) {
-  var headers = ['Record ID', 'Name', 'Mobile', 'Selfie URL', 'File Name', 'Created At'];
-  if (sheet.getMaxColumns() < headers.length) {
-    sheet.insertColumnsAfter(sheet.getMaxColumns(), headers.length - sheet.getMaxColumns());
+var BASE_HEADERS = ['ID', 'Name', 'Mobile', 'Image URL'];
+var LEGACY_HEADERS = ['Timestamp', 'Photo Status', 'Date', 'Selfie URL', 'File Name', 'Created At', 'Record ID'];
+
+function getExistingExtraHeaders(sheet) {
+  var lastColumn = sheet.getLastColumn();
+  if (lastColumn < 1) return [];
+  var headerRow = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  var extras = [];
+  for (var i = 0; i < headerRow.length; i++) {
+    var header = String(headerRow[i] || '').trim();
+    if (!header) continue;
+    if (BASE_HEADERS.indexOf(header) !== -1) continue;
+    if (LEGACY_HEADERS.indexOf(header) !== -1) continue;
+    extras.push(header);
+  }
+  return extras;
+}
+
+function buildHeaders(sheet, extraFields) {
+  var headers = BASE_HEADERS.slice();
+  var existingExtras = getExistingExtraHeaders(sheet);
+  for (var i = 0; i < existingExtras.length; i++) {
+    if (headers.indexOf(existingExtras[i]) === -1) headers.push(existingExtras[i]);
   }
 
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+  if (extraFields && typeof extraFields === 'object') {
+    var extraKeys = Object.keys(extraFields);
+    for (var j = 0; j < extraKeys.length; j++) {
+      var key = String(extraKeys[j] || '').trim();
+      if (!key) continue;
+      if (headers.indexOf(key) === -1) headers.push(key);
+    }
+  }
+
+  return headers;
+}
+
+function ensureHeaders(sheet, headers) {
+  var totalColumns = Math.max(sheet.getMaxColumns(), headers.length);
+  if (sheet.getMaxColumns() < totalColumns) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), totalColumns - sheet.getMaxColumns());
+  }
+
+  var fullHeaderRow = [];
+  for (var i = 0; i < totalColumns; i++) {
+    fullHeaderRow.push(i < headers.length ? headers[i] : '');
+  }
+
+  sheet.getRange(1, 1, 1, totalColumns).setValues([fullHeaderRow]);
   sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold');
   sheet.getRange(1, 1, 1, headers.length).setBackground('#FF6B00');
   sheet.getRange(1, 1, 1, headers.length).setFontColor('white');
@@ -28,22 +70,35 @@ function createRecordId(now) {
   return 'rec_' + now.getTime();
 }
 
-function addRecord(sheet, data) {
+function addRecord(sheet, data, headers) {
   var now = new Date();
   var recordId = data.recordId || createRecordId(now);
-  var createdAt = data.createdAt || now.toISOString();
+  var extraFields = (data.extraFields && typeof data.extraFields === 'object') ? data.extraFields : {};
+  var rowMap = {
+    'ID': recordId,
+    'Name': data.name || 'Unknown',
+    'Mobile': data.mobile || 'Unknown',
+    'Image URL': data.selfieUrl || ''
+  };
 
-  sheet.appendRow([
-    recordId,
-    data.name || 'Unknown',
-    data.mobile || 'Unknown',
-    data.selfieUrl || '',
-    data.fileName || '',
-    createdAt
-  ]);
+  var row = [];
+  for (var i = 0; i < headers.length; i++) {
+    var header = headers[i];
+    if (Object.prototype.hasOwnProperty.call(rowMap, header)) {
+      row.push(rowMap[header]);
+    } else if (Object.prototype.hasOwnProperty.call(extraFields, header)) {
+      row.push(extraFields[header]);
+    } else {
+      row.push('');
+    }
+  }
+
+  sheet.appendRow(row);
 
   return {
     success: true,
+    schemaVersion: 2,
+    action: 'add',
     message: 'Registration saved!',
     recordId: recordId,
     row: sheet.getLastRow()
@@ -61,18 +116,19 @@ function deleteRecordById(sheet, recordId) {
     if (String(values[i][0]) === String(recordId)) {
       var rowToDelete = i + 2;
       sheet.deleteRow(rowToDelete);
-      return { success: true, message: 'Record deleted', recordId: recordId, row: rowToDelete };
+      return { success: true, schemaVersion: 2, action: 'delete', message: 'Record deleted', recordId: recordId, row: rowToDelete };
     }
   }
 
-  return { success: false, error: 'Record not found', recordId: recordId };
+  return { success: false, schemaVersion: 2, action: 'delete', error: 'Record not found', recordId: recordId };
 }
 
 function doPost(e) {
   try {
     var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
     var data = JSON.parse(e.postData.contents || '{}');
-    ensureHeaders(sheet);
+    var headers = buildHeaders(sheet, data.extraFields);
+    ensureHeaders(sheet, headers);
 
     var action = (data.action || 'add').toLowerCase();
     var result;
@@ -83,10 +139,10 @@ function doPost(e) {
         result = deleteRecordById(sheet, data.recordId);
       }
     } else {
-      result = addRecord(sheet, data);
+      result = addRecord(sheet, data, headers);
     }
 
-    sheet.autoResizeColumns(1, 6);
+    sheet.autoResizeColumns(1, headers.length);
 
     return ContentService
       .createTextOutput(JSON.stringify(result))
@@ -104,11 +160,13 @@ function doPost(e) {
 
 function doGet(e) {
   var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  ensureHeaders(sheet);
+  var headers = buildHeaders(sheet, null);
+  ensureHeaders(sheet, headers);
   var count = Math.max(0, sheet.getLastRow() - 1); // subtract header row
   
   return ContentService
     .createTextOutput(JSON.stringify({ 
+      schemaVersion: 2,
       status: 'OK',
       message: 'Parshuram Shobhayatra API is running',
       totalRegistrations: count
