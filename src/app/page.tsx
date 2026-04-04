@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect, type CSSProperties } from 'react'
+import { useState, useRef, useEffect, useCallback, type CSSProperties } from 'react'
 import PosterCanvas from '@/components/PosterCanvas'
 import ShareButtons from '@/components/ShareButtons'
 import { getPosterTemplate, posterTemplates, type PosterTemplateId } from '@/lib/posterTemplates'
@@ -73,7 +73,6 @@ export default function Home() {
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null)
   const [posterDataUrl, setPosterDataUrl] = useState<string>('')
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
   const [selfiePickerOpen, setSelfiePickerOpen] = useState(false)
   const cameraInputRef = useRef<HTMLInputElement>(null)
   const galleryInputRef = useRef<HTMLInputElement>(null)
@@ -159,38 +158,50 @@ export default function Home() {
     document.body.removeChild(link)
   }
 
-  const handleSave = async () => {
-    if (!name.trim()) { setError('કૃપા કરી તમારું નામ દાખલ કરો'); return }
+  /** Sheet + Cloudinary sync — never block download/share; failures only logged. */
+  const syncRegistrationBackground = useCallback(() => {
+    if (!isValidNameLength(name) || mobile.trim().length !== 10 || !selfiePreview) return
+    void fetch('/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: name.trim(),
+        mobile: mobile.trim(),
+        selfieBase64: selfiePreview,
+        timestamp: new Date().toISOString(),
+      }),
+    })
+      .then(async res => {
+        if (!res.ok) console.error('[register]', await res.text().catch(() => ''))
+      })
+      .catch(err => console.error('[register]', err))
+  }, [name, mobile, selfiePreview])
+
+  /** Validate, download immediately, then save/update by mobile in background. */
+  const handleDownloadAndSync = () => {
+    if (!name.trim()) {
+      setError('કૃપા કરી તમારું નામ દાખલ કરો')
+      return
+    }
     if (!isValidNameLength(name)) {
       setError(`પૂરું નામ ${NAME_MIN} થી ${NAME_MAX} અક્ષર વચ્ચે લખો (અટક + નામ).`)
       return
     }
-    if (!mobile.trim() || mobile.length < 10) { setError('કૃપા કરી માન્ય મોબાઇલ નંબર દાખલ કરો'); return }
-    if (!selfiePreview) { setError('કૃપા કરી તમારો ફોટો અપલોડ કરો'); return }
-    setError('')
-    setLoading(true)
-    try {
-      const response = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.trim(),
-          mobile: mobile.trim(),
-          selfieBase64: selfiePreview,
-          timestamp: new Date().toISOString(),
-        }),
-      })
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data?.error || 'નોંધણી સેવ થઈ નહીં, ફરી પ્રયાસ કરો')
-      }
-
-      downloadPoster()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'નોંધણી કરવામાં સમસ્યા આવી')
-    } finally {
-      setLoading(false)
+    if (!mobile.trim() || mobile.length < 10) {
+      setError('કૃપા કરી માન્ય મોબાઇલ નંબર દાખલ કરો')
+      return
     }
+    if (!selfiePreview) {
+      setError('કૃપા કરી તમારો ફોટો અપલોડ કરો')
+      return
+    }
+    if (!posterDataUrl) {
+      setError('પોસ્ટર એક ક્ષણમાં તૈયાર થશે — ફરી ક્લિક કરો.')
+      return
+    }
+    setError('')
+    downloadPoster()
+    queueMicrotask(() => syncRegistrationBackground())
   }
 
   return (
@@ -323,8 +334,14 @@ export default function Home() {
 
             {error && <div className="error-box">⚠️ {error}</div>}
 
-            <button className="btn-primary" onClick={handleSave} disabled={loading}>
-              {loading ? '⏳ પોસ્ટર તૈયાર થઈ રહ્યું છે...' : isFormValid ? '⬇️ પોસ્ટર ડાઉનલોડ કરો' : '✅ માહિતી ભરો અને આગળ વધો'}
+            <button
+              className="btn-primary"
+              type="button"
+              onClick={handleDownloadAndSync}
+              disabled={!isFormValid}
+              title={!isFormValid ? 'પહેલા નામ, ફોટો અને મોબાઇલ પૂરા કરો' : undefined}
+            >
+              {isFormValid ? '⬇️ પોસ્ટર ડાઉનલોડ કરો' : '✅ માહિતી ભરો અને આગળ વધો'}
             </button>
 
             <p style={{ textAlign: 'center', color: '#aaa', fontSize: '0.72rem', marginTop: 12 }}>
@@ -357,6 +374,7 @@ export default function Home() {
                     href={posterDataUrl}
                     download={`parshuram-shobhayatra-${(name || 'poster').trim().replace(/\s+/g, '-')}.png`}
                     className="btn-download"
+                    onClick={() => queueMicrotask(() => syncRegistrationBackground())}
                   >
                     ⬇️ પોસ્ટર ડાઉનલોડ કરો અને ગેલેરીમાં સેવ કરો
                   </a>
@@ -369,6 +387,7 @@ export default function Home() {
                   name={name}
                   posterDataUrl={posterDataUrl}
                   shareEnabled={isFormValid}
+                  onShareComplete={syncRegistrationBackground}
                 />
               </div>
             )}

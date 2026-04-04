@@ -5,13 +5,15 @@ interface ShareButtonsProps {
   posterDataUrl: string
   /** When false, poster share is disabled (user must fill form first). Copy link always works. */
   shareEnabled: boolean
+  /** Called after a successful native share (not on cancel). Use for background sheet/API sync. */
+  onShareComplete?: () => void
 }
 
 /**
  * Single action: native share sheet with poster image.
  * Phone shows available apps (WhatsApp Status, Facebook, Instagram, others).
  */
-export default function ShareButtons({ name, posterDataUrl, shareEnabled }: ShareButtonsProps) {
+export default function ShareButtons({ name, posterDataUrl, shareEnabled, onShareComplete }: ShareButtonsProps) {
   const shareTitle = 'ભગવાનશ્રી પરશુરામ જન્મોત્સવ શોભાયાત્રા ૨૦૨૬'
   const pageUrlRaw = typeof window !== 'undefined' ? window.location.href : ''
 
@@ -42,6 +44,7 @@ export default function ShareButtons({ name, posterDataUrl, shareEnabled }: Shar
         files: [file],
         title: name.trim() ? `${name.trim()} — ${shareTitle}` : shareTitle,
       })
+      onShareComplete?.()
     } catch (err) {
       const e = err as { name?: string }
       if (e?.name === 'AbortError') return
@@ -91,7 +94,7 @@ export default function ShareButtons({ name, posterDataUrl, shareEnabled }: Shar
         onClick={sharePosterImage}
         disabled={!shareEnabled}
         aria-disabled={!shareEnabled}
-        title={shareEnabled ? undefined : 'પહેલા નામ (૩૦–૪૦ અક્ષર), ફોટો અને મોબાઇલ ભરો'}
+        title={shareEnabled ? undefined : 'પહેલા નામ (૫–૪૦ અક્ષર), ફોટો અને મોબાઇલ ભરો'}
       >
         <span className="share-single-icon" aria-hidden>📤</span>
         <span className="share-single-label">સ્ટેટસ / સોશિયલ મીડિયા પર શેર કરો</span>

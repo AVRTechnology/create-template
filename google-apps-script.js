@@ -169,61 +169,81 @@ function deleteRecordById(sheet, recordId) {
 }
 
 function normalizeMobileForMatch(m) {
-  return String(m || '').replace(/\D/g, '');
+  if (m === null || m === undefined) return '';
+  return String(m).replace(/\D/g, '');
+}
+
+/** Column index (0-based) for header name; trims cells; case-insensitive. */
+function headerColumnIndex(headers, canonicalName) {
+  var want = String(canonicalName || '').trim().toLowerCase();
+  for (var i = 0; i < headers.length; i++) {
+    if (String(headers[i] || '').trim().toLowerCase() === want) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 /**
- * Same mobile → update Name + Image URL in place (same row, same ID).
+ * Same mobile → update first matching row; extra duplicate rows for that mobile are deleted.
  * New mobile → append row (same as addRecord).
  */
 function upsertRecord(sheet, data, headers) {
   var mobileNorm = normalizeMobileForMatch(data.mobile);
-  var mobileColIdx = headers.indexOf('Mobile');
+  var mobileColIdx = headerColumnIndex(headers, 'Mobile');
   if (mobileColIdx < 0) {
     throw new Error('Mobile column missing');
   }
   var mobileCol = mobileColIdx + 1;
 
-  var nameColIdx = headers.indexOf('Name');
-  var imgColIdx = headers.indexOf('Image URL');
-  var idColIdx = headers.indexOf('ID');
+  var nameColIdx = headerColumnIndex(headers, 'Name');
+  var imgColIdx = headerColumnIndex(headers, 'Image URL');
+  var idColIdx = headerColumnIndex(headers, 'ID');
 
   var lastRow = sheet.getLastRow();
-  var foundRow = -1;
+  var matchingRows = [];
   if (lastRow > 1) {
     var mobileValues = sheet.getRange(2, mobileCol, lastRow, mobileCol).getValues();
     for (var i = 0; i < mobileValues.length; i++) {
       if (normalizeMobileForMatch(mobileValues[i][0]) === mobileNorm) {
-        foundRow = i + 2;
-        break;
+        matchingRows.push(i + 2);
       }
     }
   }
 
-  if (foundRow > 0) {
-    var previousImageUrl = '';
-    if (imgColIdx >= 0) {
-      previousImageUrl = String(sheet.getRange(foundRow, imgColIdx + 1).getValue() || '');
-    }
-    if (nameColIdx >= 0) {
-      sheet.getRange(foundRow, nameColIdx + 1).setValue(data.name || '');
-    }
-    if (imgColIdx >= 0) {
-      sheet.getRange(foundRow, imgColIdx + 1).setValue(data.selfieUrl || '');
-    }
-    var recordId = idColIdx >= 0 ? String(sheet.getRange(foundRow, idColIdx + 1).getValue() || '') : '';
-    return {
-      success: true,
-      schemaVersion: 2,
-      action: 'update',
-      message: 'Registration updated!',
-      recordId: recordId,
-      row: foundRow,
-      previousImageUrl: previousImageUrl
-    };
+  if (matchingRows.length === 0) {
+    return addRecord(sheet, data, headers);
   }
 
-  return addRecord(sheet, data, headers);
+  matchingRows.sort(function (a, b) {
+    return a - b;
+  });
+  var keepRow = matchingRows[0];
+  for (var k = matchingRows.length - 1; k >= 1; k--) {
+    sheet.deleteRow(matchingRows[k]);
+  }
+
+  var previousImageUrl = '';
+  if (imgColIdx >= 0) {
+    previousImageUrl = String(sheet.getRange(keepRow, imgColIdx + 1).getValue() || '');
+  }
+  if (nameColIdx >= 0) {
+    sheet.getRange(keepRow, nameColIdx + 1).setValue(data.name || '');
+  }
+  if (imgColIdx >= 0) {
+    sheet.getRange(keepRow, imgColIdx + 1).setValue(data.selfieUrl || '');
+  }
+  var recordId = idColIdx >= 0 ? String(sheet.getRange(keepRow, idColIdx + 1).getValue() || '') : '';
+  return {
+    success: true,
+    schemaVersion: 2,
+    action: 'update',
+    message: 'Registration updated!',
+    recordId: recordId,
+    row: keepRow,
+    previousImageUrl: previousImageUrl,
+    duplicatesRemoved: matchingRows.length - 1
+  };
 }
 
 function doPost(e) {
