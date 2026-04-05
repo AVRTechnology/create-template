@@ -85,7 +85,7 @@ export default function ShareButtons({ name, posterDataUrl, shareEnabled, onShar
         <strong className="share-sub-apps">ફેસબુક</strong>
         {' · '}
         <strong className="share-sub-apps">ઇન્સ્ટાગ્રામ</strong>
-        <span className="share-sub-extra"> — પ્ર. સ્ટેટસ મૂકો</span>
+        <span className="share-sub-extra"> — પર સ્ટેટસ મૂકો</span>
       </p>
 
       <button
