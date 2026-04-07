@@ -53,9 +53,9 @@ export const posterTemplates: PosterTemplate[] = [
       textColor: '#FFFFFF',
     },
     selfie: {
-      cx: 840,
-      cy: 825,
-      radius: 96,
+      cx: 858,
+      cy: 821,
+      radius: 106,
     },
   },
   {
@@ -74,9 +74,9 @@ export const posterTemplates: PosterTemplate[] = [
       textColor: '#FFFFFF',
     },
     selfie: {
-      cx: 840,
-      cy: 836,
-      radius: 98,
+      cx: 858,
+      cy: 832,
+      radius: 108,
     },
   },
 ]
